@@ -1,85 +1,34 @@
-# android-fat-aar
-Gradle script that allows you to merge and embed dependencies in generted aar file. 
 
-**Why do I need is a fat AAR?**
+因為透過 Android Gradle Plugin 打包的 AAR，不會包含透過 Maven 依賴的 AAR&JAR 或是 Local 的 AAR，所以如果發佈了一個自己的 Library，其他使用此 Library 的開發者必須自行 Dependencies 相關的檔案。
 
-There may be multiple reasons for wanting this. My reason was that I wanted to publish a single library 
-while maintaining a modular structure within the project. The benefit of a fat aar file is that we can
-proguard the combined code instead of proguarding each and every subproject which is not that effective.
+為了方便開發者使用，我們可以透過以下作法來產生一個包含所有 AAR&JAR 的 AAR。
 
-**Changes**
-- Added support for consumerProguardFiles
-      
-**What doesn't work?**
+1. 在 Library 專案裡的 build.gradle 加一行
+apply from: 'https://raw.githubusercontent.com/tuvvut/android-fat-aar/master/fat-aar.gradle'
 
-1. Manifest placeholders that are expected to be filled in by the application
-2. AIDL File merger - I do not use aidl files
-3. Multiple build types - only single build type (release) is supported out of the box
-4. ?
+2. 對於 dependencies 裡 compile AAR 的指令改成 embedded AAR.
+例如：
 
-**Step 1: Apply the gradle file** 
+compile 'xxx.xxx.xxx:library:1.0.0-SNAPSHOT@aar'
+改成
+embedded 'xxx.xxx.xxx:library:1.0.0-SNAPSHOT@aar'
 
-To use this simply copy the gradle file 'fat-aar.gradle' to your project directory and then
+或是
 
-`apply from: 'fat-aar.gradle'`
+compile(name: 'library-1.0.0-SNAPSHOT', ext: 'aar')
+改成
+embedded(name: 'library-1.0.0-SNAPSHOT', ext: 'aar')
 
-or apply directly from the url
+3. 將產生的 AAR 檔給其他開發者用就行了
+路徑範例：../yourLibrary/build/outputs/aar/yourLibrary-release.aar
 
-`apply from: 'https://raw.githubusercontent.com/adwiv/android-fat-aar/master/fat-aar.gradle'`
+結束！
 
-**Step 2: Define the embedded dependencies** 
+註：
+1. 目前只針對 release 的 AAR 有效
 
-Then you can modify the dependencies section and change the word `compile` to `embedded` 
-for the dependencies you want merged within the aar file. The resulting section may look like this:
+2.參考資料
+	2-1. 將 JAR 包進 AAR https://gist.github.com/qrtt1/25a44fa29e46a5ec7f5b
+	2-2. 將 AAR 包進 AAR https://github.com/adwiv/android-fat-aar
 
-    dependencies {
-      compile fileTree(dir: 'libs', include: ['*.jar'])
-
-      // Order of dependencies decide which will have precedence in case of duplicates 
-      // during manifest / resource merger 
-      embedded project(':librarytwo')
-      embedded project(':libraryone')
-      embedded project('com.example.internal:lib-three:1.2.3')
-      
-      compile 'com.example:some-other-lib:1.0.3'
-      compile 'com.android.support:appcompat-v7:22.2.0'
-    }
-    
-The dependencies with keyword `embedded` will be merged while the others will remain referenced as before.
-
-**Step 3: Remove embedded dependencies from exported dependency list**
-
-Now that you have embedded your sub projects into the main library, you need to ensure that anyone using 
-your library does not resolve the embedded projects as transitive dependencies. Otherwise he will get 
-duplicate class errors. 
-
-If you are using the fat library within the same project (maybe within a test app?), then you can simply define 
-your fat-library dependency as non transitive.
-
-    compile (project(':applibrary')) {  // Notice the parentheses around project
-        transitive false
-    }
-
-For external clients or use in another project; this can be achieved by removing these dependencies from the 
-generated pom.xml file. How to automate that will depend on how you are generating the pom file. I use 
-`maven-publish` plugin with the following pom generator.
-
-    pom.withXml {
-        def dependenciesNode = asNode().appendNode('dependencies')
-        //Iterate over the compile dependencies (we don't want the test ones), adding a <dependency> node for each
-        configurations.compile.allDependencies.each {
-            if(it.group != null && (it.name != null || "unspecified".equals(it.name)) && it.version != null)
-            {
-                if(!configurations.embedded.allDependencies.contains(it)) {
-                def dependencyNode = dependenciesNode.appendNode('dependency')
-                dependencyNode.appendNode('groupId', it.group)
-                dependencyNode.appendNode('artifactId', it.name)
-                dependencyNode.appendNode('version', it.version)
-                }
-            }
-        }
-    }
-
-**The complete `publish.gradle` file (That also automatically adds the transitive dependencies as primary) is in the repository.**
-
-Hope this helps.
+3.更詳細的說明請參考：https://github.com/adwiv/android-fat-aar
