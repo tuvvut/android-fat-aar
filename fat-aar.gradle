@@ -67,57 +67,61 @@ dependencies {
 ext.embeddedAarDirs = new ArrayList<String>()
 
 afterEvaluate {
+    def isAndroidLibraryProject = project.plugins.hasPlugin('com.android.library')
+    if (isAndroidLibraryProject) {
+        bundleRelease.dependsOn copyReleaseDependencies
 
-    // the list of dependency must be reversed to use the right overlay order.
-    def dependencies = new ArrayList(configurations.embedded.resolvedConfiguration.firstLevelModuleDependencies)
-    dependencies.reverseEach {
-        def aarPath = "build/intermediates/exploded-aar/${it.moduleGroup}/${it.moduleName}/${it.moduleVersion}"
-        if (!embeddedAarDirs.contains(aarPath)) {
-            embeddedAarDirs.add(aarPath)
+        // the list of dependency must be reversed to use the right overlay order.
+        def dependencies = new ArrayList(configurations.embedded.resolvedConfiguration.firstLevelModuleDependencies)
+        dependencies.reverseEach {
+            def aarPath = "build/intermediates/exploded-aar/${it.moduleGroup}/${it.moduleName}/${it.moduleVersion}"
+            if (!embeddedAarDirs.contains(aarPath)) {
+                embeddedAarDirs.add(aarPath)
+            }
         }
+
+        // Merge Assets
+        generateReleaseAssets.dependsOn embedAssets
+
+        // Embed Resources by overwriting the inputResourceSets
+        packageReleaseResources.dependsOn embedLibraryResources
+
+        // Merge Native libraries
+        if (tasks.findByPath('packageReleaseJniLibs') != null) {
+            embedJniLibs.mustRunAfter packageReleaseJniLibs
+        } else if (tasks.findByPath('mergeReleaseJniLibFolders') != null) {
+            embedJniLibs.mustRunAfter mergeReleaseJniLibFolders
+        } else {
+            NEEDTOFIX
+        }
+        bundleRelease.dependsOn embedJniLibs
+
+        // Merge Embedded Manifests
+        embedManifests.mustRunAfter processReleaseManifest
+        bundleRelease.dependsOn embedManifests
+
+        // Generate R.java for each embedded package and ensure it is compiled
+        embedRClassFiles.mustRunAfter processReleaseResources
+
+        // Merge proguard files
+        embedLibraryResources.dependsOn embedProguard
+
+        if (tasks.findByPath('compileReleaseJava') != null) {
+            compileReleaseJava.dependsOn embedRClassFiles
+            embedJavaJars.mustRunAfter compileReleaseJava
+        } else if (tasks.findByPath('compileReleaseJavaWithJavac') != null) {
+            compileReleaseJavaWithJavac.dependsOn embedRClassFiles
+            embedJavaJars.mustRunAfter compileReleaseJavaWithJavac
+        } else {
+            NEEDTOFIX
+        }
+
+        if (tasks.findByPath('proguardRelease') != null) {
+            proguardRelease.dependsOn embedJavaJars
+        }
+
+        bundleRelease.dependsOn embedJavaJars
     }
-
-    // Merge Assets
-    generateReleaseAssets.dependsOn embedAssets
-
-    // Embed Resources by overwriting the inputResourceSets
-    packageReleaseResources.dependsOn embedLibraryResources
-
-    // Merge Native libraries
-    if (tasks.findByPath('packageReleaseJniLibs') != null) {
-        embedJniLibs.mustRunAfter packageReleaseJniLibs
-    } else if (tasks.findByPath('mergeReleaseJniLibFolders') != null) {
-        embedJniLibs.mustRunAfter mergeReleaseJniLibFolders
-    } else {
-        NEEDTOFIX
-    }
-    bundleRelease.dependsOn embedJniLibs
-
-    // Merge Embedded Manifests
-    embedManifests.mustRunAfter processReleaseManifest
-    bundleRelease.dependsOn embedManifests
-
-    // Generate R.java for each embedded package and ensure it is compiled
-    embedRClassFiles.mustRunAfter processReleaseResources
-
-    // Merge proguard files
-    embedLibraryResources.dependsOn embedProguard
-
-    if (tasks.findByPath('compileReleaseJava') != null) {
-        compileReleaseJava.dependsOn embedRClassFiles
-        embedJavaJars.mustRunAfter compileReleaseJava
-    } else if (tasks.findByPath('compileReleaseJavaWithJavac') != null) {
-        compileReleaseJavaWithJavac.dependsOn embedRClassFiles
-        embedJavaJars.mustRunAfter compileReleaseJavaWithJavac
-    } else {
-        NEEDTOFIX
-    }
-
-    if (tasks.findByPath('proguardRelease') != null) {
-        proguardRelease.dependsOn embedJavaJars
-    }
-
-    bundleRelease.dependsOn embedJavaJars
 }
 
 task embedLibraryResources << {
@@ -148,6 +152,15 @@ private List getMergedInputResourceSets(List inputResourceSet) {
     }
 
     return newInputResourceSet
+}
+
+task copyReleaseDependencies << {
+    copy {
+        from configurations.compile {
+            include '**/*.jar'
+        }
+        into "./build/intermediates/bundles/release/libs/"
+    }
 }
 
 /**
