@@ -17,7 +17,9 @@
 改成</br>
 `embedded(name: 'library-1.0.0-SNAPSHOT', ext: 'aar')`</br>
 </br>
-3. 將產生的 AAR 檔給其他開發者用就行了</br>
+3. 執行 assemble 的 task</br>
+</br>
+4. 將產生的 AAR 檔給其他開發者用就行了</br>
 路徑範例：../yourLibrary/build/outputs/aar/yourLibrary-release.aar</br>
 </br>
 結束！</br>
